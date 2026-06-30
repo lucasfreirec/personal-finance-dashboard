@@ -1,0 +1,229 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>My Finances</title>
+<link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <h1>My Finances</h1>
+    <div class="tools">
+      <div class="accent-menu">
+        <button class="accent-trigger" id="accentTrigger" title="Change app color" aria-label="Change app color"></button>
+        <div class="accent-pop" id="accentPop" hidden>
+          <div class="swatches" id="swatches"></div>
+          <input type="color" id="accentPicker" class="accent-picker" title="Custom color" />
+        </div>
+      </div>
+      <button class="ghost tiny" id="exportBtn" title="Save your data as finance-data.json (keep it next to index.html)">Save to file</button>
+      <button class="ghost tiny" id="importBtn" title="Load your data back from finance-data.json">Load file</button>
+      <input type="file" id="importFile" accept="application/json" />
+    </div>
+  </header>
+
+  <!-- Month navigator -->
+  <div class="month-nav">
+    <button class="tiny arrow" id="prevMonth" title="Previous month">‹</button>
+    <div class="month-label" id="monthLabel">—</div>
+    <button class="tiny arrow" id="nextMonth" title="Next month">›</button>
+    <button class="tiny ghost" id="thisMonthBtn" title="Jump to current month">Today</button>
+  </div>
+
+  <div class="ro-banner" id="roBanner">
+    <span>🔒 Viewing <span id="roMonth">a past month</span> — read-only. Editing is disabled to protect past records.</span>
+    <button class="tiny" id="roBackBtn">Back to current month</button>
+  </div>
+
+  <!-- Dashboard -->
+  <section class="cards">
+    <div class="card">
+      <div class="label">Money I have</div>
+      <div class="value" id="cardTotal">—</div>
+      <div class="sub" id="cardTotalSub"></div>
+    </div>
+    <div class="card">
+      <div class="label">Income</div>
+      <div class="value income" id="cardIncome">—</div>
+    </div>
+    <div class="card">
+      <div class="label">Spent</div>
+      <div class="value expense" id="cardExpense">—</div>
+    </div>
+    <div class="card">
+      <div class="label">Upcoming</div>
+      <div class="value warn" id="cardUpcoming">—</div>
+      <div class="sub" id="cardUpcomingSub"></div>
+    </div>
+  </section>
+
+  <!-- Spending chart -->
+  <section class="chart-wrap card" id="chartCard">
+    <div class="section-title"><h2 id="chartHeading">Spending by category</h2><span class="hint" id="chartTotal"></span></div>
+    <div id="chart"></div>
+  </section>
+
+  <!-- Tabs -->
+  <nav class="tabs">
+    <button data-tab="transactions" class="active">Transactions</button>
+    <button data-tab="upcoming">Future expenses</button>
+    <button data-tab="recurring">Recurring</button>
+    <button data-tab="budgets">Budgets</button>
+    <button data-tab="accounts">Accounts</button>
+  </nav>
+
+  <!-- TRANSACTIONS -->
+  <div class="panel active" id="panel-transactions">
+    <form class="add" id="txForm">
+      <div class="field col-2">
+        <label>Type</label>
+        <select id="txType">
+          <option value="expense">Expense</option>
+          <option value="income">Income</option>
+        </select>
+      </div>
+      <div class="field col-2">
+        <label>Amount</label>
+        <input id="txAmount" type="number" step="0.01" min="0" placeholder="0.00" required />
+      </div>
+      <div class="field col-4">
+        <label>Description</label>
+        <input id="txDesc" type="text" placeholder="e.g. Groceries" required />
+      </div>
+      <div class="field col-2">
+        <label>Category</label>
+        <input id="txCategory" list="categories" placeholder="Category" />
+      </div>
+      <div class="field col-2">
+        <label>Date</label>
+        <input id="txDate" type="date" required />
+      </div>
+      <div class="field col-3">
+        <label>Account</label>
+        <select id="txAccount"></select>
+      </div>
+      <div class="field col-3" style="justify-content:flex-end">
+        <label>&nbsp;</label>
+        <button class="primary" type="submit">Add transaction</button>
+      </div>
+    </form>
+    <div class="section-title"><h2>History</h2><span class="hint"><span id="txHint"></span> <button class="tiny ghost" id="txScope" style="margin-left:6px"></button></span></div>
+    <div class="list" id="txList"></div>
+  </div>
+
+  <!-- UPCOMING -->
+  <div class="panel" id="panel-upcoming">
+    <form class="add" id="upForm">
+      <div class="field col-4">
+        <label>Description</label>
+        <input id="upDesc" type="text" placeholder="e.g. Rent" required />
+      </div>
+      <div class="field col-2">
+        <label>Amount</label>
+        <input id="upAmount" type="number" step="0.01" min="0" placeholder="0.00" required />
+      </div>
+      <div class="field col-2">
+        <label>Category</label>
+        <input id="upCategory" list="categories" placeholder="Category" />
+      </div>
+      <div class="field col-2">
+        <label>Due date</label>
+        <input id="upDate" type="date" required />
+      </div>
+      <div class="field col-2" style="justify-content:flex-end">
+        <label>&nbsp;</label>
+        <button class="primary" type="submit">Add</button>
+      </div>
+    </form>
+    <div class="section-title"><h2>Planned & future expenses</h2><span class="hint">Mark as paid to log it</span></div>
+    <div class="list" id="upList"></div>
+  </div>
+
+  <!-- RECURRING -->
+  <div class="panel" id="panel-recurring">
+    <form class="add" id="recForm">
+      <div class="field col-4">
+        <label>Description</label>
+        <input id="recDesc" type="text" placeholder="e.g. Netflix, Rent" required />
+      </div>
+      <div class="field col-2">
+        <label>Amount</label>
+        <input id="recAmount" type="number" step="0.01" min="0" placeholder="0.00" required />
+      </div>
+      <div class="field col-2">
+        <label>Category</label>
+        <input id="recCategory" list="categories" placeholder="Category" />
+      </div>
+      <div class="field col-2">
+        <label>Day of month</label>
+        <input id="recDay" type="number" min="1" max="31" value="1" required />
+      </div>
+      <div class="field col-2" style="justify-content:flex-end">
+        <label>&nbsp;</label>
+        <button class="primary" type="submit">Add</button>
+      </div>
+      <div class="field col-4">
+        <label>Account</label>
+        <select id="recAccount"></select>
+      </div>
+    </form>
+    <div class="section-title"><h2>Recurring expenses</h2><span class="hint">Auto-added as an expense each month</span></div>
+    <div class="list" id="recList"></div>
+  </div>
+
+  <!-- BUDGETS -->
+  <div class="panel" id="panel-budgets">
+    <form class="add" id="budForm">
+      <div class="field col-6">
+        <label>Category</label>
+        <input id="budCategory" list="categories" placeholder="e.g. Food" required />
+      </div>
+      <div class="field col-4">
+        <label>Monthly limit</label>
+        <input id="budLimit" type="number" step="0.01" min="0" placeholder="0.00" required />
+      </div>
+      <div class="field col-2" style="justify-content:flex-end">
+        <label>&nbsp;</label>
+        <button class="primary" type="submit">Set</button>
+      </div>
+    </form>
+    <div class="section-title"><h2>Monthly budgets</h2><span class="hint" id="budHint">Tracks spending per category</span></div>
+    <div class="list" id="budList"></div>
+  </div>
+
+  <!-- ACCOUNTS -->
+  <div class="panel" id="panel-accounts">
+    <form class="add" id="accForm">
+      <div class="field col-6">
+        <label>Account name</label>
+        <input id="accName" type="text" placeholder="e.g. Checking, Savings, Cash" required />
+      </div>
+      <div class="field col-4">
+        <label>Starting balance</label>
+        <input id="accOpening" type="number" step="0.01" placeholder="0.00" />
+      </div>
+      <div class="field col-2" style="justify-content:flex-end">
+        <label>&nbsp;</label>
+        <button class="primary" type="submit">Add</button>
+      </div>
+    </form>
+    <div class="section-title"><h2>Accounts</h2><span class="hint">Balances update automatically from transactions</span></div>
+    <div class="list" id="accList"></div>
+  </div>
+
+  <div class="footer-note" id="footerNote"></div>
+</div>
+
+<datalist id="categories">
+  <option>Food</option><option>Groceries</option><option>Rent</option><option>Utilities</option>
+  <option>Transport</option><option>Health</option><option>Shopping</option><option>Entertainment</option>
+  <option>Subscriptions</option><option>Salary</option><option>Savings</option><option>Other</option>
+</datalist>
+
+<div id="toastWrap" class="toast-wrap"></div>
+
+<script src="app.js"></script>
+</body>
+</html>

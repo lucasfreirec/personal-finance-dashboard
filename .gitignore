@@ -1,0 +1,9 @@
+# macOS
+.DS_Store
+
+# Personal data (your private financial info — keep out of git)
+finance-data.json
+
+# Editor / OS noise
+*.log
+Thumbs.db
