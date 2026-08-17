@@ -109,28 +109,32 @@
         <button class="primary" type="submit">Add transaction</button>
       </div>
     </form>
-    <div class="section-title"><h2>History</h2><span class="hint"><span id="txHint"></span> <button class="tiny ghost" id="txScope" style="margin-left:6px"></button></span></div>
+    <div class="section-title"><h2>History</h2><span class="hint"><select id="txCategoryFilter" class="tiny-select" title="Filter by category"><option value="">All categories</option></select> <span id="txHint"></span> <button class="tiny ghost" id="txScope" style="margin-left:6px"></button></span></div>
     <div class="list" id="txList"></div>
   </div>
 
   <!-- UPCOMING -->
   <div class="panel" id="panel-upcoming">
     <form class="add" id="upForm">
-      <div class="field col-4">
+      <div class="field col-6">
         <label>Description</label>
         <input id="upDesc" type="text" placeholder="e.g. Rent" required />
       </div>
-      <div class="field col-2">
+      <div class="field col-3">
         <label>Amount</label>
         <input id="upAmount" type="number" step="0.01" min="0" placeholder="0.00" required />
       </div>
-      <div class="field col-2">
+      <div class="field col-3">
+        <label>Due date</label>
+        <input id="upDate" type="date" required />
+      </div>
+      <div class="field col-5">
         <label>Category</label>
         <input id="upCategory" list="categories" placeholder="Category" />
       </div>
-      <div class="field col-2">
-        <label>Due date</label>
-        <input id="upDate" type="date" required />
+      <div class="field col-5">
+        <label>Pay from account</label>
+        <select id="upAccount"></select>
       </div>
       <div class="field col-2" style="justify-content:flex-end">
         <label>&nbsp;</label>
@@ -195,6 +199,24 @@
 
   <!-- ACCOUNTS -->
   <div class="panel" id="panel-accounts">
+    <form class="add" id="transferForm">
+      <div class="field col-4">
+        <label>From account</label>
+        <select id="tfFrom"></select>
+      </div>
+      <div class="field col-4">
+        <label>To account</label>
+        <select id="tfTo"></select>
+      </div>
+      <div class="field col-2">
+        <label>Amount</label>
+        <input id="tfAmount" type="number" step="0.01" min="0" placeholder="0.00" required />
+      </div>
+      <div class="field col-2" style="justify-content:flex-end">
+        <label>&nbsp;</label>
+        <button class="primary" type="submit">Transfer</button>
+      </div>
+    </form>
     <form class="add" id="accForm">
       <div class="field col-6">
         <label>Account name</label>
@@ -218,12 +240,13 @@
 
 <datalist id="categories">
   <option>Food</option><option>Groceries</option><option>Rent</option><option>Utilities</option>
-  <option>Transport</option><option>Health</option><option>Shopping</option><option>Entertainment</option>
+  <option>Transport</option><option>Travel</option><option>Health</option><option>Shopping</option><option>Entertainment</option>
   <option>Subscriptions</option><option>Salary</option><option>Savings</option><option>Other</option>
 </datalist>
 
 <div id="toastWrap" class="toast-wrap"></div>
 
+<script src="supabase-sync.js"></script>
 <script src="app.js"></script>
 </body>
 </html>

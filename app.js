@@ -9,6 +9,7 @@ const DEFAULT_ACCOUNTS = [
   { name: "BB Americas", color: "#f4d019", text: "#2b2300", badge: "BB", logo: "assets/bb.png" },
   { name: "Societe Generale", color: "#e60028", text: "#ffffff", badge: "SG", logo: "assets/sg.png" },
   { name: "Wise", color: "#9fe870", text: "#163300", badge: "W", logo: "assets/wise.webp" },
+  { name: "Revolut", color: "#191c1f", text: "#ffffff", badge: "R", logo: "assets/revolut.png" },
 ];
 
 function load() {
@@ -77,6 +78,7 @@ function monthLabel(monthStr) {
 /* Month being viewed in the dashboard, chart, budgets and history. */
 let viewMonth = ym();
 let showAllTx = false;
+let filterCategory = "";
 let readOnly = false;
 function inViewMonth(dateStr) { return (dateStr || "").slice(0, 7) === viewMonth; }
 function todayStr() {
@@ -220,8 +222,15 @@ function renderDashboard() {
   $("#cardIncome").textContent = fmt(monthTotal("income"));
   $("#cardExpense").textContent = fmt(monthTotal("expense"));
   $("#cardUpcoming").textContent = fmt(upcomingTotal());
-  $("#cardUpcomingSub").textContent =
-    data.upcoming.length ? `${data.upcoming.length} planned item${data.upcoming.length>1?"s":""}` : "Nothing planned";
+  const overdue = data.upcoming.filter((u) => (u.date || "") < todayStr());
+  const cardUp = $("#cardUpcoming");
+  cardUp.classList.toggle("expense", overdue.length > 0);
+  cardUp.classList.toggle("warn", overdue.length === 0);
+  $("#cardUpcomingSub").textContent = !data.upcoming.length
+    ? "Nothing planned"
+    : overdue.length
+      ? `${overdue.length} overdue · ${data.upcoming.length} planned`
+      : `${data.upcoming.length} planned item${data.upcoming.length>1?"s":""}`;
 }
 
 function accountOptions(selectedId) {
@@ -253,24 +262,47 @@ function accountBadge(acc) {
   return fallback;
 }
 
+function renderCategoryFilter() {
+  const sel = $("#txCategoryFilter");
+  if (!sel) return;
+  const cats = new Set();
+  data.transactions.forEach((t) => cats.add((t.category && t.category.trim()) || "Uncategorized"));
+  const sorted = [...cats].sort((a, b) => a.localeCompare(b));
+  // Keep the current selection even if no matching transaction exists this render.
+  if (filterCategory && !cats.has(filterCategory)) sorted.push(filterCategory);
+  sel.innerHTML = `<option value="">All categories</option>` +
+    sorted.map((c) => `<option value="${esc(c)}" ${c === filterCategory ? "selected" : ""}>${esc(c)}</option>`).join("");
+}
+
 function renderTransactions() {
   $("#txAccount").innerHTML = accountOptions($("#txAccount").value);
+  renderCategoryFilter();
   const list = $("#txList");
   const sorted = [...data.transactions].sort((a,b) => (b.date+b.id).localeCompare(a.date+a.id));
-  const txs = showAllTx ? sorted : sorted.filter((t) => inViewMonth(t.date));
+  let txs = showAllTx ? sorted : sorted.filter((t) => inViewMonth(t.date));
+  if (filterCategory) {
+    txs = txs.filter((t) => ((t.category && t.category.trim()) || "Uncategorized") === filterCategory);
+  }
   $("#txScope").textContent = showAllTx ? "Show selected month" : "Show all months";
   $("#txHint").textContent = txs.length ? `${txs.length} ${txs.length === 1 ? "entry" : "entries"}` : "";
   if (!txs.length) {
-    list.innerHTML = showAllTx
-      ? emptyState("\u{1F9FE}", "No transactions yet", "Add your first expense or income above.")
-      : emptyState("\u{1F9FE}", `Nothing in ${monthLabel(viewMonth)}`, "Switch months above, or click ‘Show all’.");
+    const scope = showAllTx ? "" : ` in ${monthLabel(viewMonth)}`;
+    if (filterCategory) {
+      list.innerHTML = emptyState("\u{1F9FE}", `No “${filterCategory}” transactions${scope}`, "Try another category or clear the filter.");
+    } else {
+      list.innerHTML = showAllTx
+        ? emptyState("\u{1F9FE}", "No transactions yet", "Add your first expense or income above.")
+        : emptyState("\u{1F9FE}", `Nothing in ${monthLabel(viewMonth)}`, "Switch months above, or click ‘Show all’.");
+    }
     return;
   }
   list.innerHTML = txs.map((t) => {
     const acc = data.accounts.find((a) => a.id === t.accountId);
+    const isTransfer = t.category === "Transfer";
     const sign = t.type === "income" ? "+" : "−";
+    const dotColor = isTransfer ? "var(--accent)" : (t.type === "income" ? "var(--income)" : "var(--expense)");
     return `<div class="row">
-      <div class="dot" style="background:${t.type==="income"?"var(--income)":"var(--expense)"}"></div>
+      <div class="dot" style="background:${dotColor}"></div>
       <div class="main">
         <div class="title">${esc(t.description)}</div>
         <div class="meta">
@@ -287,30 +319,48 @@ function renderTransactions() {
   }).join("");
 }
 
+function daysUntil(dateStr) {
+  if (!dateStr) return 0;
+  const [ty, tm, td] = todayStr().split("-").map(Number);
+  const [dy, dm, dd] = dateStr.split("-").map(Number);
+  return Math.round((Date.UTC(dy, dm - 1, dd) - Date.UTC(ty, tm - 1, td)) / 86400000);
+}
+function dueLabelFor(dateStr) {
+  const diff = daysUntil(dateStr);
+  if (diff === 0) return "Due today";
+  if (diff === 1) return "Due tomorrow";
+  if (diff === -1) return "Overdue · yesterday";
+  if (diff < -1) return `Overdue · ${-diff} days ago`;
+  if (diff <= 7) return `Due in ${diff} days`;
+  return `Due ${prettyDate(dateStr)}`;
+}
+
 function renderUpcoming() {
+  $("#upAccount").innerHTML = accountOptions($("#upAccount").value);
   const list = $("#upList");
   const items = [...data.upcoming].sort((a,b) => (a.date||"").localeCompare(b.date||""));
   if (!items.length) {
     list.innerHTML = emptyState("📅", "No future expenses", "Plan upcoming bills so nothing surprises you.");
     return;
   }
-  const today = todayStr();
   list.innerHTML = items.map((u) => {
-    let dueClass = "", dueLabel = prettyDate(u.date);
-    if (u.date < today) { dueClass = "due-over"; dueLabel = "Overdue · " + dueLabel; }
-    else if (u.date === today) { dueClass = "due-soon"; dueLabel = "Due today"; }
+    const diff = daysUntil(u.date);
+    const cls = diff < 0 ? "due-over" : diff <= 3 ? "due-soon" : "";
+    const dotColor = diff < 0 ? "var(--expense)" : "var(--warn)";
+    const acc = data.accounts.find((a) => a.id === u.accountId);
     return `<div class="row">
-      <div class="dot" style="background:var(--warn)"></div>
+      <div class="dot" style="background:${dotColor}"></div>
       <div class="main">
         <div class="title">${esc(u.description)}</div>
         <div class="meta">
-          <span class="${dueClass}">${dueLabel}</span>
+          <span class="${cls}">${dueLabelFor(u.date)}</span>
           ${u.category ? `<span class="pill">${esc(u.category)}</span>` : ""}
+          ${acc ? `<span class="pill">${esc(acc.name)}</span>` : ""}
         </div>
       </div>
       <div class="amount expense">${fmt(u.amount)}</div>
       <div class="actions">
-        <button class="tiny primary" data-action="pay" data-id="${u.id}" title="Log as paid">Paid</button>
+        <button class="tiny primary" data-action="pay" data-id="${u.id}" title="Log as paid today">Paid</button>
         <button class="tiny danger" data-action="del-up" data-id="${u.id}" title="Delete">✕</button>
       </div>
     </div>`;
@@ -319,6 +369,8 @@ function renderUpcoming() {
 
 let editingAccount = null;
 function renderAccounts() {
+  $("#tfFrom").innerHTML = accountOptions($("#tfFrom").value);
+  $("#tfTo").innerHTML = accountOptions($("#tfTo").value);
   const list = $("#accList");
   if (!data.accounts.length) {
     list.innerHTML = emptyState("🏦", "No accounts yet", "Add an account to track where your money is.");
@@ -487,6 +539,7 @@ $("#nextMonth").addEventListener("click", () => { if (viewMonth >= ym()) return;
 $("#thisMonthBtn").addEventListener("click", () => { viewMonth = ym(); render(); });
 $("#roBackBtn").addEventListener("click", () => { viewMonth = ym(); render(); });
 $("#txScope").addEventListener("click", () => { showAllTx = !showAllTx; renderTransactions(); });
+$("#txCategoryFilter").addEventListener("change", (e) => { filterCategory = e.target.value; renderTransactions(); });
 
 /* ---------- Tabs ---------- */
 document.querySelectorAll("nav.tabs button").forEach((btn) => {
@@ -511,7 +564,7 @@ $("#txForm").addEventListener("submit", (e) => {
     toast("Add an account first (Accounts tab) so we know where the money is.");
     return;
   }
-  data.transactions.push({
+  const newTx = {
     id: uid(),
     type: $("#txType").value,
     amount,
@@ -519,8 +572,10 @@ $("#txForm").addEventListener("submit", (e) => {
     category: $("#txCategory").value.trim(),
     date: $("#txDate").value || todayStr(),
     accountId: $("#txAccount").value,
-  });
+  };
+  data.transactions.push(newTx);
   save(); render();
+  pushToSupabase(newTx);
   e.target.reset();
   $("#txDate").value = todayStr();
   $("#txAmount").focus();
@@ -537,6 +592,7 @@ $("#upForm").addEventListener("submit", (e) => {
     amount,
     category: $("#upCategory").value.trim(),
     date: $("#upDate").value || todayStr(),
+    accountId: $("#upAccount").value,
   });
   save(); render();
   e.target.reset();
@@ -597,6 +653,38 @@ $("#budForm").addEventListener("submit", (e) => {
   $("#budCategory").focus();
 });
 
+$("#transferForm").addEventListener("submit", (e) => {
+  e.preventDefault();
+  if (readOnly) return;
+  const amount = parseFloat($("#tfAmount").value);
+  if (!(amount > 0)) return;
+  const fromId = $("#tfFrom").value;
+  const toId = $("#tfTo").value;
+  if (!fromId || !toId || fromId === toId) {
+    toast("Pick two different accounts.");
+    return;
+  }
+  const fromAcc = data.accounts.find((a) => a.id === fromId);
+  const toAcc = data.accounts.find((a) => a.id === toId);
+  const linkId = uid();
+  mutate("Transfer recorded", () => {
+    data.transactions.push({
+      id: uid(), type: "expense", amount,
+      description: `Transfer to ${toAcc.name}`,
+      category: "Transfer", date: todayStr(),
+      accountId: fromId, transferId: linkId,
+    });
+    data.transactions.push({
+      id: uid(), type: "income", amount,
+      description: `Transfer from ${fromAcc.name}`,
+      category: "Transfer", date: todayStr(),
+      accountId: toId, transferId: linkId,
+    });
+  });
+  e.target.reset();
+  $("#tfAmount").focus();
+});
+
 /* ---------- Row actions (event delegation) ---------- */
 document.addEventListener("click", (e) => {
   const btn = e.target.closest("button[data-action]");
@@ -606,6 +694,7 @@ document.addEventListener("click", (e) => {
   switch (btn.dataset.action) {
     case "del-tx":
       mutate("Transaction deleted", () => { data.transactions = data.transactions.filter((t) => t.id !== id); });
+      deleteFromSupabase(id);
       break;
     case "del-up":
       mutate("Future expense deleted", () => { data.upcoming = data.upcoming.filter((u) => u.id !== id); });
@@ -620,13 +709,16 @@ document.addEventListener("click", (e) => {
       const item = data.upcoming.find((u) => u.id === id);
       if (!item) break;
       if (!data.accounts.length) { toast("Add an account first to log this payment."); break; }
-      data.transactions.push({
-        id: uid(), type: "expense", amount: item.amount,
-        description: item.description, category: item.category,
-        date: todayStr(), accountId: data.accounts[0].id,
+      const accId = data.accounts.some((a) => a.id === item.accountId) ? item.accountId : data.accounts[0].id;
+      mutate("Marked as paid", () => {
+        data.transactions.push({
+          id: uid(), type: "expense", amount: item.amount,
+          description: item.description, category: item.category,
+          date: todayStr(), accountId: accId,
+        });
+        data.upcoming = data.upcoming.filter((u) => u.id !== id);
       });
-      data.upcoming = data.upcoming.filter((u) => u.id !== id);
-      save(); render(); break;
+      break;
     }
     case "edit-acc":
       editingAccount = id;
@@ -707,3 +799,15 @@ if ($("#accentPicker")) $("#accentPicker").value = data.accent || "#4f8cff";
 renderSwatches();
 processRecurring();
 render();
+
+// Pull expenses added via iPhone Shortcut
+function runSync() {
+  sync(data).then((n) => { if (n > 0) { save(); render(); toast(`Synced ${n} change${n > 1 ? "s" : ""}`); } });
+}
+runSync();
+
+// Re-sync when returning to the tab (Safari freezes pages in background)
+document.addEventListener("visibilitychange", () => { if (!document.hidden) runSync(); });
+
+// Auto-sync every 30s while the page is visible
+setInterval(() => { if (!document.hidden) runSync(); }, 30000);

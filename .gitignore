@@ -4,6 +4,9 @@
 # Personal data (your private financial info — keep out of git)
 finance-data.json
 
+# Supabase config (contains API keys)
+supabase-sync.js
+
 # Editor / OS noise
 *.log
 Thumbs.db
